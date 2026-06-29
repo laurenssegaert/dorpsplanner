@@ -219,6 +219,8 @@ button{ font-family:var(--font-display); cursor:pointer; border:none; color:var(
   display:none; align-items:center; justify-content:center; z-index:50; padding:16px;
 }
 .overlay.open{ display:flex; animation:fadeIn .2s; }
+/* login-overlay vult het scherm volledig (agenda niet zichtbaar erachter) */
+#loginOverlay{ background:linear-gradient(160deg, var(--bg-1), var(--bg-2)); backdrop-filter:none; }
 .modal{
   background:var(--panel); border-radius:var(--radius-lg); padding:22px; width:100%; max-width:480px;
   max-height:88vh; overflow-y:auto; box-shadow:var(--shadow); border:5px solid rgba(255,255,255,.8);
@@ -250,7 +252,7 @@ button{ font-family:var(--font-display); cursor:pointer; border:none; color:var(
 /* formulier */
 .form{ display:flex; flex-direction:column; gap:12px; }
 .field label{ display:block; font-family:var(--font-display); font-weight:700; margin-bottom:5px; font-size:.92rem; }
-.field input[type=text], .field input[type=time], .field input[type=date], .field textarea, .field select{
+.field input[type=text], .field input[type=email], .field input[type=password], .field input[type=time], .field input[type=date], .field textarea, .field select{
   width:100%; font-family:var(--font-body); font-weight:600; font-size:1rem; color:var(--ink);
   padding:11px 14px; border-radius:14px; border:3px solid rgba(0,0,0,.07); background:var(--panel-2); outline:none;
   transition:border-color .2s, transform .1s;
