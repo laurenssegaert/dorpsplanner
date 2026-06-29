@@ -134,10 +134,30 @@ button{ font-family:var(--font-display); cursor:pointer; border:none; color:var(
 .calendar{
   background:var(--panel); border-radius:var(--radius-lg); padding:16px;
   box-shadow:var(--shadow); border:4px solid rgba(255,255,255,.7);
+  --cell-gap:8px;   /* afstand tussen dagtegels (gedeeld door tegels + balklaag) */
+  --band-top:24px;  /* verticale start van de balken-band (celpadding + nummerhoogte) */
 }
 .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin-bottom:8px; }
 .weekdays div{ text-align:center; font-family:var(--font-display); font-weight:700; color:var(--ink-soft); font-size:.85rem; padding:4px 0; }
-.grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:8px; }
+.grid{ display:flex; flex-direction:column; gap:var(--cell-gap); }   /* weken gestapeld */
+
+/* week-rij: dagtegels + een laag erbovenop voor doorlopende balken */
+.week{ position:relative; }
+.week-cells{ display:grid; grid-template-columns:repeat(7,1fr); gap:var(--cell-gap); }
+.week-spans{
+  position:absolute; left:0; right:0; top:var(--band-top);
+  display:grid; grid-template-columns:repeat(7,1fr); gap:var(--cell-gap);
+  grid-auto-rows:19px; pointer-events:none; z-index:2;
+}
+.band-spacer{ flex:0 0 auto; }   /* gereserveerde ruimte in elke tegel voor de balken */
+.lanebar{
+  height:16px; align-self:start; border-radius:999px; color:#fff;
+  font-family:var(--font-display); font-weight:700; font-size:.66rem; line-height:16px;
+  padding:0 8px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+  box-shadow:0 1px 2px rgba(0,0,0,.15); pointer-events:auto; cursor:pointer; transition:transform .12s;
+}
+.lanebar:hover{ transform:translateY(-1px); }
+.cell .num{ height:18px; line-height:18px; }   /* vaste nummerhoogte → balken lijnen uit */
 
 .cell{
   position:relative; min-height:92px; border-radius:20px; padding:6px;
@@ -305,10 +325,12 @@ html.precheck-authed #loginOverlay{ display:none; }
 /* ---------- 8. RESPONSIVE ---------- */
 @media (max-width:640px){
   .title{ font-size:1.3rem; }
+  .calendar{ --cell-gap:4px; --band-top:18px; }   /* compactere band op mobiel */
   .cell{ min-height:64px; padding:4px; }
-  .cell .num{ font-size:.85rem; }
+  .cell .num{ font-size:.85rem; height:14px; line-height:14px; }
   .cell.today::after{ font-size:.5rem; padding:1px 5px; }
   .evchip{ font-size:.58rem; padding:1px 5px; }
+  .lanebar{ font-size:.55rem; padding:0 5px; }
   .weekdays div{ font-size:.7rem; }
   .grid, .weekdays{ gap:4px; }
   .monthnav h2{ font-size:1.2rem; min-width:auto; }
@@ -887,65 +909,113 @@ function renderCalendar(){
   const daysInMonth = new Date(y,m+1,0).getDate();
   const tIso = todayISO();
 
-  // lege voorloop-cellen
-  for(let i=0;i<lead;i++){ const c=document.createElement('div'); c.className='cell empty'; grid.appendChild(c); }
+  // bouw weken (rijen) met telkens 7 dagslots; null = lege cel
+  const slots=[];
+  for(let i=0;i<lead;i++) slots.push(null);
+  for(let d=1; d<=daysInMonth; d++) slots.push(new Date(y,m,d));
+  while(slots.length % 7 !== 0) slots.push(null);     // laatste week aanvullen
+  const weeks=[];
+  for(let i=0;i<slots.length;i+=7) weeks.push(slots.slice(i,i+7));
 
-  for(let d=1; d<=daysInMonth; d++){
-    const dateObj = new Date(y,m,d);
-    const dISO = iso(dateObj);
-    const cell = document.createElement('div');
-    cell.className='cell';
-    cell.dataset.iso = dISO;
-    cell.style.animationDelay = (d*0.012)+'s';
-    cell.setAttribute('role','button');
-    cell.setAttribute('tabindex','0');
+  // alle meerdaagse events krijgen doorlopende balken
+  const spans = state.events.filter(isSpan);
 
-    if(dISO===tIso) cell.classList.add('today');
-    else if(dISO < tIso) cell.classList.add('past');
+  weeks.forEach((week, wi)=>{
+    const dayISOs = week.map(dt=> dt ? iso(dt) : null);
+    const realISOs = dayISOs.filter(Boolean);
+    const wkStart = realISOs[0], wkEnd = realISOs[realISOs.length-1];
 
-    const num=document.createElement('div'); num.className='num'; num.textContent=d; cell.appendChild(num);
+    // 1) balk-segmenten + lane-toewijzing voor deze week
+    const segments=[];      // {ev, c0, c1, lane}
+    const laneOcc=[];       // laneOcc[lane] = lijst van bezette [c0,c1]
+    if(wkStart){
+      spans.forEach(ev=>{
+        if(ev.end < wkStart || ev.start > wkEnd) return;          // geen overlap
+        let c0=0; while(c0<7 && (dayISOs[c0]===null || dayISOs[c0] < ev.start)) c0++;
+        let c1=6; while(c1>=0 && (dayISOs[c1]===null || dayISOs[c1] > ev.end)) c1--;
+        if(c0>c1 || c0>6 || c1<0) return;
+        let lane=0;
+        while(true){
+          const occ = laneOcc[lane] || (laneOcc[lane]=[]);
+          if(occ.every(([a,b])=> c1<a || c0>b)){ occ.push([c0,c1]); break; }
+          lane++;
+        }
+        segments.push({ ev, c0, c1, lane });
+      });
+    }
+    const maxLanes = laneOcc.length;
 
-    // events
-    const evs = eventsOnDay(dISO);
-    if(evs.length) cell.classList.add('has-events');
-    let shown=0;
-    for(const ev of evs){
-      if(shown>=3) break;
-      const cat = CATEGORIES[ev.cat] || CATEGORIES.afspraak;
-      // multi-day -> balk
-      if(ev.end && ev.repeat==='none' && ev.start!==ev.end){
-        const bar=document.createElement('div');
-        const isStart = ev.start===dISO;
-        const isEnd = ev.end===dISO;
-        bar.className='spanbar '+(isStart&&isEnd?'solo':isStart?'start':isEnd?'end':'mid');
-        bar.style.background=cat.color;
-        bar.textContent = isStart ? `${cat.icon} ${ev.title}` : (mondayIndex(dateObj)===0 ? ev.title : '');
-        if(isDone(ev,dISO)) bar.style.opacity='.5';
-        cell.appendChild(bar);
-      } else {
+    const weekEl=document.createElement('div'); weekEl.className='week';
+
+    // 2) de dagtegels
+    const cells=document.createElement('div'); cells.className='week-cells';
+    week.forEach((dt, ci)=>{
+      if(!dt){ const e=document.createElement('div'); e.className='cell empty'; cells.appendChild(e); return; }
+      const dISO=iso(dt), d=dt.getDate();
+      const cell=document.createElement('div');
+      cell.className='cell'; cell.dataset.iso=dISO;
+      cell.style.animationDelay=(wi*0.03 + ci*0.012)+'s';
+      cell.setAttribute('role','button'); cell.setAttribute('tabindex','0');
+      if(dISO===tIso) cell.classList.add('today');
+      else if(dISO<tIso) cell.classList.add('past');
+
+      const num=document.createElement('div'); num.className='num'; num.textContent=d; cell.appendChild(num);
+
+      // ruimte reserveren voor de balken-band (zodat enkel-dag chips eronder komen)
+      if(maxLanes){ const sp=document.createElement('div'); sp.className='band-spacer'; sp.style.height=(maxLanes*19)+'px'; cell.appendChild(sp); }
+
+      // enkel-dag events als chips (meerdaagse zitten in de balken-laag)
+      const evs=eventsOnDay(dISO);
+      const singles=evs.filter(ev=>!isSpan(ev));
+      if(evs.length) cell.classList.add('has-events');
+      let shown=0;
+      for(const ev of singles){
+        if(shown>=3) break;
+        const cat=CATEGORIES[ev.cat]||CATEGORIES.afspraak;
         const chip=document.createElement('div');
         chip.className='evchip'+(isDone(ev,dISO)?' done':'');
         chip.style.background=cat.color;
-        chip.textContent = (ev.time? ev.time+' ':'') + cat.icon + ' ' + ev.title;
+        chip.textContent=(ev.time?ev.time+' ':'')+cat.icon+' '+ev.title;
         cell.appendChild(chip);
+        shown++;
       }
-      shown++;
-    }
-    if(evs.length>shown){ const more=document.createElement('div'); more.className='evmore'; more.textContent=`+${evs.length-shown} meer`; cell.appendChild(more); }
+      if(singles.length>shown){ const more=document.createElement('div'); more.className='evmore'; more.textContent=`+${singles.length-shown} meer`; cell.appendChild(more); }
 
-    // voorbije-dag stempel
-    if(dISO < tIso){
-      const seiz = seizoenVoorMaand(m);
-      const st=document.createElement('div'); st.className='stamp'; st.textContent = SEIZOEN_STEMPEL[seiz]||'🐾'; cell.appendChild(st);
+      if(dISO<tIso){ const seiz=seizoenVoorMaand(m); const st=document.createElement('div'); st.className='stamp'; st.textContent=SEIZOEN_STEMPEL[seiz]||'🐾'; cell.appendChild(st); }
+
+      cell.setAttribute('aria-label', `${d} ${MAANDEN[m]}${dISO===tIso?' (vandaag)':''}` + (evs.length?`, ${evs.length} afspra${evs.length===1?'ak':'ken'}`:', geen afspraken'));
+      cell.addEventListener('keydown',(e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openDay(dISO); } });
+      cell.addEventListener('pointerdown',(e)=>startDragSelect(e,dISO));
+      cells.appendChild(cell);
+    });
+    weekEl.appendChild(cells);
+
+    // 3) de doorlopende balken-laag bovenop de tegels
+    if(segments.length){
+      const layer=document.createElement('div'); layer.className='week-spans';
+      segments.forEach(seg=>{
+        const cat=CATEGORIES[seg.ev.cat]||CATEGORIES.afspraak;
+        const bar=document.createElement('div'); bar.className='lanebar';
+        bar.style.background=cat.color;
+        bar.style.gridColumn=(seg.c0+1)+' / '+(seg.c1+2);
+        bar.style.gridRow=(seg.lane+1);
+        const startsHere = dayISOs[seg.c0]===seg.ev.start;   // begint de balk echt hier?
+        bar.textContent=(startsHere ? cat.icon+' ' : '↪ ')+seg.ev.title;
+        if(isDone(seg.ev, seg.ev.start)) bar.style.opacity='.55';
+        bar.title=seg.ev.title+' ('+ddmm(seg.ev.start)+'→'+ddmm(seg.ev.end)+')';
+        bar.setAttribute('aria-label', seg.ev.title+', van '+ddmm(seg.ev.start)+' tot '+ddmm(seg.ev.end));
+        bar.addEventListener('click',(e)=>{ e.stopPropagation(); selectedDate=seg.ev.start; openForm(seg.ev); });
+        layer.appendChild(bar);
+      });
+      weekEl.appendChild(layer);
     }
 
-    // toegankelijk label + toetsenbordbediening
-    cell.setAttribute('aria-label', `${d} ${MAANDEN[m]}${dISO===tIso?' (vandaag)':''}` + (evs.length?`, ${evs.length} afspra${evs.length===1?'ak':'ken'}`:', geen afspraken'));
-    cell.addEventListener('keydown',(e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openDay(dISO); } });
-    cell.addEventListener('pointerdown', (e)=>startDragSelect(e, dISO));
-    grid.appendChild(cell);
-  }
+    grid.appendChild(weekEl);
+  });
 }
+
+// meerdaags event? (krijgt een doorlopende balk i.p.v. een chip)
+function isSpan(ev){ return !!(ev.end && ev.repeat==='none' && ev.start!==ev.end); }
 
 /* ---------- DRAG-SELECTIE VAN MEERDERE DAGEN ---------- */
 // Klik-en-sleep over de kalender om een meerdaags event aan te maken.
