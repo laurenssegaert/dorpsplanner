@@ -639,6 +639,17 @@ async function bootstrapCloud(){
      registratie), de RLS-regels laten enkel 'authenticated' toe
    ================================================================ */
 let authed = false;
+let currentUser = null;   // ingelogde gebruiker (voor de begroeting)
+
+// vriendelijke naam afleiden: ingestelde naam, anders het deel vóór de @
+function userName(){
+  if(!currentUser) return '';
+  const m = currentUser.user_metadata || {};
+  const name = m.display_name || m.name || m.full_name;
+  if(name) return String(name).trim();
+  let local = (currentUser.email || '').split('@')[0].replace(/[._-]+/g,' ').trim();
+  return local ? local.charAt(0).toUpperCase()+local.slice(1) : '';
+}
 
 function showLogin(){
   document.getElementById('loginOverlay').classList.add('open');
@@ -658,14 +669,15 @@ async function startAuthFlow(){
     hideLogin(); updateSyncUI(); setTimeout(begroet, 600); return;
   }
   const { data } = await sb.auth.getSession();
-  if(data && data.session) onLoggedIn(); else showLogin();
+  if(data && data.session) onLoggedIn(data.session); else showLogin();
   // reageer op latere wijzigingen (inloggen/uitloggen/token-refresh)
   sb.auth.onAuthStateChange((_event, session)=>{
-    if(session) onLoggedIn(); else onLoggedOut();
+    if(session) onLoggedIn(session); else onLoggedOut();
   });
 }
 
-async function onLoggedIn(){
+async function onLoggedIn(session){
+  if(session) currentUser = session.user;
   hideLogin();
   if(authed) return;          // niet dubbel bootstrappen
   authed = true;
@@ -674,6 +686,7 @@ async function onLoggedIn(){
 }
 function onLoggedOut(){
   authed = false;
+  currentUser = null;
   showLogin();
 }
 
@@ -1080,7 +1093,9 @@ function sayLeegDag(){ say(LEEG[Math.floor(Math.random()*LEEG.length)]); }
 function sayBewaard(t){ say(`"${t}" staat genoteerd! 📌`); }
 function begroet(){
   const u=new Date().getHours();
-  let groet = u<6?'Nog wakker? 🌙':u<12?'Goeiemorgen! ☀️':u<18?'Goeiemiddag! 🌼':'Goeienavond! 🌆';
+  const naam = userName();
+  const a = naam ? ', '+naam : '';   // ", Laurens" indien ingelogd
+  let groet = u<6?`Nog wakker${a}? 🌙`:u<12?`Goeiemorgen${a}! ☀️`:u<18?`Goeiemiddag${a}! 🌼`:`Goeienavond${a}! 🌆`;
   const tIso=todayISO();
   const evs=eventsOnDay(tIso).filter(e=>!isDone(e,tIso));
   if(evs.length){ say(`${groet} Je hebt vandaag ${evs.length} afspra${evs.length===1?'ak':'ken'} op de planning! 📅`,6000); }
