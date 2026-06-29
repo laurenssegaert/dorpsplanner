@@ -318,6 +318,14 @@ html.precheck-authed #loginOverlay{ display:none; }
   .cell .evchip:nth-of-type(n+2){ display:none; }
   .cell.has-events::before{ content:''; }
 }
+
+/* ---------- TOEGANKELIJKHEID ---------- */
+/* zichtbare focus-ring voor toetsenbordgebruikers */
+:focus-visible{ outline:3px solid var(--accent-deep); outline-offset:2px; border-radius:8px; }
+/* respecteer "verminderde beweging" */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{ animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important; }
+}
 </style>
 <!-- Anti-flits: was deze gebruiker ingelogd? Dan login-overlay meteen verbergen
      (draait vóór de pagina tekent, zodat de kalender direct uit cache verschijnt). -->
@@ -355,9 +363,9 @@ html.precheck-authed #loginOverlay{ display:none; }
 
   <!-- MAAND-NAVIGATIE -->
   <div class="monthnav" id="monthNav">
-    <button class="btn round" id="prevBtn">‹</button>
-    <h2 id="monthLabel">…</h2>
-    <button class="btn round" id="nextBtn">›</button>
+    <button class="btn round" id="prevBtn" aria-label="Vorige maand">‹</button>
+    <h2 id="monthLabel" aria-live="polite">…</h2>
+    <button class="btn round" id="nextBtn" aria-label="Volgende maand">›</button>
   </div>
 
   <!-- KALENDER -->
@@ -378,14 +386,14 @@ html.precheck-authed #loginOverlay{ display:none; }
 
 <!-- MASCOTTE -->
 <div class="mascot">
-  <div class="face" id="mascotFace" title="Klik voor een tip!">🐶</div>
-  <div class="bubble" id="mascotBubble"></div>
+  <div class="face" id="mascotFace" title="Klik voor een tip!" role="button" tabindex="0" aria-label="Mascotte — klik voor een tip">🐶</div>
+  <div class="bubble" id="mascotBubble" role="status" aria-live="polite"></div>
 </div>
 
 <!-- DAG-DETAIL MODAL -->
 <div class="overlay" id="dayOverlay">
-  <div class="modal">
-    <button class="modal-close" id="dayClose">✕</button>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dayTitle">
+    <button class="modal-close" id="dayClose" aria-label="Sluiten">✕</button>
     <h3 id="dayTitle">Dag</h3>
     <div class="sub" id="daySub"></div>
     <div class="daylist" id="dayEvents"></div>
@@ -395,8 +403,8 @@ html.precheck-authed #loginOverlay{ display:none; }
 
 <!-- EVENT FORMULIER MODAL -->
 <div class="overlay" id="formOverlay">
-  <div class="modal">
-    <button class="modal-close" id="formClose">✕</button>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+    <button class="modal-close" id="formClose" aria-label="Sluiten">✕</button>
     <h3 id="formTitle">Nieuwe afspraak</h3>
     <div class="form">
       <div class="field">
@@ -443,7 +451,7 @@ html.precheck-authed #loginOverlay{ display:none; }
 
 <!-- LOGIN MODAL — afscherming met Supabase Auth (standaard open) -->
 <div class="overlay open" id="loginOverlay">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:380px" role="dialog" aria-modal="true" aria-label="Inloggen bij Dorpsplanner">
     <h3>🔑 Dorpsplanner</h3>
     <!-- tijdens het checken van de sessie: neutraal bericht, geen formulier-flits -->
     <div class="sub" id="loginLoading" style="text-align:center; padding:14px 0;">Even kijken of je al ingelogd bent… 🌱</div>
@@ -889,6 +897,8 @@ function renderCalendar(){
     cell.className='cell';
     cell.dataset.iso = dISO;
     cell.style.animationDelay = (d*0.012)+'s';
+    cell.setAttribute('role','button');
+    cell.setAttribute('tabindex','0');
 
     if(dISO===tIso) cell.classList.add('today');
     else if(dISO < tIso) cell.classList.add('past');
@@ -929,6 +939,9 @@ function renderCalendar(){
       const st=document.createElement('div'); st.className='stamp'; st.textContent = SEIZOEN_STEMPEL[seiz]||'🐾'; cell.appendChild(st);
     }
 
+    // toegankelijk label + toetsenbordbediening
+    cell.setAttribute('aria-label', `${d} ${MAANDEN[m]}${dISO===tIso?' (vandaag)':''}` + (evs.length?`, ${evs.length} afspra${evs.length===1?'ak':'ken'}`:', geen afspraken'));
+    cell.addEventListener('keydown',(e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openDay(dISO); } });
     cell.addEventListener('pointerdown', (e)=>startDragSelect(e, dISO));
     grid.appendChild(cell);
   }
@@ -1166,7 +1179,9 @@ function begroet(){
   else { say(`${groet} Welkom terug in het dorp! 🏡`,6000); }
 }
 const MASCOT_TIPS=['Klik op een dag om afspraken toe te voegen! 📅','Vink afspraken af voor confetti! 🎉','Vergeet je backup niet: ⬇️ knopje! 💾','Voorbije dagen krijgen een seizoensstempel. 🍂','Houd je streak vast door alles af te vinken! 🔥'];
-document.getElementById('mascotFace').addEventListener('click',()=>{ say(MASCOT_TIPS[Math.floor(Math.random()*MASCOT_TIPS.length)]); blip(640); });
+const mascotTip=()=>{ say(MASCOT_TIPS[Math.floor(Math.random()*MASCOT_TIPS.length)]); blip(640); };
+document.getElementById('mascotFace').addEventListener('click',mascotTip);
+document.getElementById('mascotFace').addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); mascotTip(); } });
 
 /* ---------- STREAK / GAMIFICATION ---------- */
 // Een dag telt als "voltooid" wanneer er minstens 1 event was en ALLES is afgevinkt.
