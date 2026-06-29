@@ -499,7 +499,7 @@ html.precheck-authed #loginOverlay{ display:none; }
 <canvas id="fx"></canvas>
 
 <!-- Supabase JS (CDN) — voor de gedeelde, gesynchroniseerde agenda -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.2" integrity="sha384-JWEyvHh+lRf0sN/WWY+QTQwX+CyWqmNg4tkc8GQzAMEtR2wGNrCJlvnu1lHD1kDm" crossorigin="anonymous"></script>
 <script>
 /* ================================================================
    DORPSPLANNER — JavaScript
@@ -1101,7 +1101,7 @@ function renderAgenda(){
       item.style.borderLeftColor=cat.color;
       item.innerHTML=`<div class="ai-icon">${cat.icon}</div>
         <div class="ai-body"><div class="ai-title">${escapeHtml(ev.title)}</div>
-        <div class="ai-meta">${ev.time?'🕑 '+ev.time+' · ':''}${cat.label}${ev.note?' · '+escapeHtml(ev.note):''}</div></div>`;
+        <div class="ai-meta">${ev.time?'🕑 '+escapeHtml(ev.time)+' · ':''}${cat.label}${ev.note?' · '+escapeHtml(ev.note):''}</div></div>`;
       item.addEventListener('click', ()=>openDay(dISO));
       wrap.appendChild(item);
     }
@@ -1140,7 +1140,7 @@ function renderDayEvents(){
       <div class="dr-icon">${cat.icon}</div>
       <div class="dr-body">
         <div class="dr-title">${escapeHtml(ev.title)}</div>
-        <div class="dr-meta">${ev.time?'🕑 '+ev.time+' · ':''}${cat.label}${ev.repeat!=='none'?' · 🔁 '+repeatLabel(ev.repeat):''}${ev.end&&ev.start!==ev.end?' · '+ddmm(ev.start)+'→'+ddmm(ev.end):''}${ev.note?'<br>'+escapeHtml(ev.note):''}</div>
+        <div class="dr-meta">${ev.time?'🕑 '+escapeHtml(ev.time)+' · ':''}${cat.label}${ev.repeat!=='none'?' · 🔁 '+repeatLabel(ev.repeat):''}${ev.end&&ev.start!==ev.end?' · '+ddmm(ev.start)+'→'+ddmm(ev.end):''}${ev.note?'<br>'+escapeHtml(ev.note):''}</div>
       </div>
       <button class="dr-del" title="Verwijderen">🗑️</button>`;
     // afvinken
