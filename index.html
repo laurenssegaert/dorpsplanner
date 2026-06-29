@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- Content-Security-Policy: beperkt waar code/data heen mag. connect-src laat
+     enkel deze Supabase toe (REST + realtime websocket); fonts via Google;
+     supabase-js via jsDelivr. 'unsafe-inline' is nodig omdat de app inline draait. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://kmjfmmmwpefarwdlkyvc.supabase.co wss://kmjfmmmwpefarwdlkyvc.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>🌿 Dorpsplanner</title>
 <!-- ============================================================
      FONTS (Google Fonts CDN)
