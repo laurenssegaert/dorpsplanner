@@ -221,6 +221,8 @@ button{ font-family:var(--font-display); cursor:pointer; border:none; color:var(
 .overlay.open{ display:flex; animation:fadeIn .2s; }
 /* login-overlay vult het scherm volledig (agenda niet zichtbaar erachter) */
 #loginOverlay{ background:linear-gradient(160deg, var(--bg-1), var(--bg-2)); backdrop-filter:none; }
+/* anti-flits: wie net nog ingelogd was, ziet meteen de kalender (geen login-flits) */
+html.precheck-authed #loginOverlay{ display:none; }
 .modal{
   background:var(--panel); border-radius:var(--radius-lg); padding:22px; width:100%; max-width:480px;
   max-height:88vh; overflow-y:auto; box-shadow:var(--shadow); border:5px solid rgba(255,255,255,.8);
@@ -317,6 +319,11 @@ button{ font-family:var(--font-display); cursor:pointer; border:none; color:var(
   .cell.has-events::before{ content:''; }
 }
 </style>
+<!-- Anti-flits: was deze gebruiker ingelogd? Dan login-overlay meteen verbergen
+     (draait vóór de pagina tekent, zodat de kalender direct uit cache verschijnt). -->
+<script>
+  try{ if(localStorage.getItem('dorpsplanner.authed')==='1') document.documentElement.classList.add('precheck-authed'); }catch(e){}
+</script>
 </head>
 <body>
 
@@ -652,6 +659,9 @@ function userName(){
 }
 
 function showLogin(){
+  // vlaggetje weg: er is geen geldige sessie, dus de overlay mag tonen
+  try{ localStorage.removeItem('dorpsplanner.authed'); }catch(e){}
+  document.documentElement.classList.remove('precheck-authed');
   document.getElementById('loginOverlay').classList.add('open');
   document.getElementById('loginLoading').hidden = true;   // klaar met checken
   document.getElementById('loginForm').hidden = false;     // toon het formulier
@@ -678,6 +688,8 @@ async function startAuthFlow(){
 
 async function onLoggedIn(session){
   if(session) currentUser = session.user;
+  // vlaggetje zetten voor een flits-vrije volgende reload
+  try{ localStorage.setItem('dorpsplanner.authed','1'); }catch(e){}
   hideLogin();
   if(authed) return;          // niet dubbel bootstrappen
   authed = true;
