@@ -436,18 +436,23 @@ button{ font-family:var(--font-display); cursor:pointer; border:none; color:var(
 <div class="overlay open" id="loginOverlay">
   <div class="modal" style="max-width:380px">
     <h3>🔑 Dorpsplanner</h3>
-    <div class="sub">Log in om je gedeelde agenda te zien.</div>
-    <div class="form">
-      <div class="field">
-        <label>E-mail</label>
-        <input type="email" id="loginEmail" placeholder="jij@voorbeeld.be" autocomplete="username">
+    <!-- tijdens het checken van de sessie: neutraal bericht, geen formulier-flits -->
+    <div class="sub" id="loginLoading" style="text-align:center; padding:14px 0;">Even kijken of je al ingelogd bent… 🌱</div>
+    <!-- pas tonen als er echt geen sessie is -->
+    <div id="loginForm" hidden>
+      <div class="sub">Log in om je gedeelde agenda te zien.</div>
+      <div class="form">
+        <div class="field">
+          <label>E-mail</label>
+          <input type="email" id="loginEmail" placeholder="jij@voorbeeld.be" autocomplete="username">
+        </div>
+        <div class="field">
+          <label>Wachtwoord</label>
+          <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button class="btn primary" id="loginBtn" style="width:100%">Inloggen</button>
+        <div id="loginMsg" style="text-align:center; font-family:var(--font-display); font-weight:600; min-height:20px; color:var(--accent-deep);"></div>
       </div>
-      <div class="field">
-        <label>Wachtwoord</label>
-        <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password">
-      </div>
-      <button class="btn primary" id="loginBtn" style="width:100%">Inloggen</button>
-      <div id="loginMsg" style="text-align:center; font-family:var(--font-display); font-weight:600; min-height:20px; color:var(--accent-deep);"></div>
     </div>
   </div>
 </div>
@@ -635,6 +640,8 @@ let authed = false;
 
 function showLogin(){
   document.getElementById('loginOverlay').classList.add('open');
+  document.getElementById('loginLoading').hidden = true;   // klaar met checken
+  document.getElementById('loginForm').hidden = false;     // toon het formulier
   document.getElementById('logoutBtn').hidden = true;
 }
 function hideLogin(){
