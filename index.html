@@ -270,6 +270,8 @@ html.precheck-authed #loginOverlay{ display:none; }
 .dr-body{ flex:1; min-width:0; }
 .dr-title{ font-family:var(--font-display); font-weight:700; }
 .dr-meta{ font-size:.8rem; color:var(--ink-soft); }
+/* maker-avatartje */
+.who{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; color:#fff; font-family:var(--font-display); font-weight:700; font-size:.62rem; vertical-align:middle; margin-right:4px; box-shadow:0 1px 2px rgba(0,0,0,.2); }
 .dr-del{ background:transparent; font-size:1.05rem; opacity:.5; padding:4px; }
 .dr-del:hover{ opacity:1; transform:scale(1.15); }
 
@@ -369,6 +371,7 @@ html.precheck-authed #loginOverlay{ display:none; }
     <div class="spacer"></div>
     <div class="streak" id="streakChip" title="Dagen op rij alles afgevinkt">🔥 <span id="streakNum">0</span></div>
     <div class="streak" id="syncChip" style="background:var(--wood-deep)" title="Verbindingsstatus">💾 lokaal</div>
+    <div class="streak" id="presenceChip" style="background:var(--leaf-deep)" title="Wie is er online" hidden>🟢 1</div>
     <div class="toolbtns">
       <button class="btn ghost small" id="muteBtn" title="Geluid aan/uit">🔊</button>
       <button class="btn ghost small" id="exportBtn" title="Exporteer als JSON">⬇️</button>
@@ -563,8 +566,8 @@ function initSupabase(){
 }
 
 // vertaal tussen het app-event en een databaserij
-function rowToEvent(r){ return { id:r.id, title:r.title, cat:r.cat, start:r.start_date, end:r.end_date||'', time:r.time||'', note:r.note||'', repeat:r.repeat||'none' }; }
-function eventToRow(ev){ return { id:ev.id, title:ev.title, cat:ev.cat, start_date:ev.start, end_date:ev.end||null, time:ev.time||null, note:ev.note||null, repeat:ev.repeat||'none' }; }
+function rowToEvent(r){ return { id:r.id, title:r.title, cat:r.cat, start:r.start_date, end:r.end_date||'', time:r.time||'', note:r.note||'', repeat:r.repeat||'none', created_by:r.created_by||null, creator:r.creator_name||'' }; }
+function eventToRow(ev){ return { id:ev.id, title:ev.title, cat:ev.cat, start_date:ev.start, end_date:ev.end||null, time:ev.time||null, note:ev.note||null, repeat:ev.repeat||'none', created_by:ev.created_by||null, creator_name:ev.creator||null }; }
 
 // alle data uit de cloud halen
 async function pullAll(){
@@ -680,7 +683,12 @@ function subscribeRealtime(){
       } else {
         const ev = rowToEvent(payload.new);
         const i = state.events.findIndex(x=>x.id===ev.id);
+        const isNew = i<0;
         if(i>=0) state.events[i]=ev; else state.events.push(ev);
+        // iemand anders heeft net iets toegevoegd -> mascotte meldt het
+        if(payload.eventType==='INSERT' && isNew && ev.created_by && currentUser && ev.created_by!==currentUser.id){
+          say(`${ev.creator||'Iemand'} heeft net "${ev.title}" toegevoegd! 🎉`, 5500);
+        }
       }
       saveState(); render(); if(selectedDate) renderDayEvents();
     })
@@ -690,6 +698,33 @@ function subscribeRealtime(){
       saveState(); render(); if(selectedDate) renderDayEvents();
     })
     .subscribe();
+}
+
+/* ---------- AANWEZIGHEID ("wie is er online") ---------- */
+let presenceCh = null;
+function subscribePresence(){
+  if(!sb || presenceCh || !currentUser) return;
+  presenceCh = sb.channel('dorp-presence', { config:{ presence:{ key: currentUser.id } } });
+  presenceCh
+    .on('presence', { event:'sync' }, ()=>{
+      const st = presenceCh.presenceState();
+      const namen = Object.values(st).map(arr=> arr[0] && arr[0].name).filter(Boolean);
+      updatePresenceUI(namen);
+    })
+    .on('presence', { event:'join' }, ({ newPresences })=>{
+      newPresences.forEach(p=>{ if(p.uid && p.uid!==currentUser.id) say(`${p.name||'Iemand'} is online! 👋`, 4000); });
+    })
+    .subscribe(async (status)=>{
+      if(status==='SUBSCRIBED') await presenceCh.track({ name:userName(), uid:currentUser.id });
+    });
+}
+function updatePresenceUI(namen){
+  const chip=document.getElementById('presenceChip');
+  if(!chip) return;
+  const n = namen.length;
+  chip.hidden = n<=0;
+  chip.textContent = '🟢 '+n;
+  chip.title = n ? ('Online: '+namen.join(', ')) : 'Wie is er online';
 }
 
 function flagOffline(){
@@ -722,6 +757,7 @@ async function bootstrapCloud(){
   }
   render(); if(selectedDate) renderDayEvents();
   subscribeRealtime();
+  subscribePresence();
 }
 
 /* ================================================================
@@ -1105,7 +1141,7 @@ function renderAgenda(){
       item.style.borderLeftColor=cat.color;
       item.innerHTML=`<div class="ai-icon">${cat.icon}</div>
         <div class="ai-body"><div class="ai-title">${escapeHtml(ev.title)}</div>
-        <div class="ai-meta">${ev.time?'🕑 '+escapeHtml(ev.time)+' · ':''}${cat.label}${ev.note?' · '+escapeHtml(ev.note):''}</div></div>`;
+        <div class="ai-meta">${ev.time?'🕑 '+escapeHtml(ev.time)+' · ':''}${cat.label}${ev.note?' · '+escapeHtml(ev.note):''}${ev.creator?' · '+creatorBadge(ev)+escapeHtml(ev.creator):''}</div></div>`;
       item.addEventListener('click', ()=>openDay(dISO));
       wrap.appendChild(item);
     }
@@ -1144,7 +1180,7 @@ function renderDayEvents(){
       <div class="dr-icon">${cat.icon}</div>
       <div class="dr-body">
         <div class="dr-title">${escapeHtml(ev.title)}</div>
-        <div class="dr-meta">${ev.time?'🕑 '+escapeHtml(ev.time)+' · ':''}${cat.label}${ev.repeat!=='none'?' · 🔁 '+repeatLabel(ev.repeat):''}${ev.end&&ev.start!==ev.end?' · '+ddmm(ev.start)+'→'+ddmm(ev.end):''}${ev.note?'<br>'+escapeHtml(ev.note):''}</div>
+        <div class="dr-meta">${ev.time?'🕑 '+escapeHtml(ev.time)+' · ':''}${cat.label}${ev.repeat!=='none'?' · 🔁 '+repeatLabel(ev.repeat):''}${ev.end&&ev.start!==ev.end?' · '+ddmm(ev.start)+'→'+ddmm(ev.end):''}${ev.creator?'<br>'+creatorBadge(ev)+'door '+escapeHtml(ev.creator):''}${ev.note?'<br>'+escapeHtml(ev.note):''}</div>
       </div>
       <button class="dr-del" title="Verwijderen">🗑️</button>`;
     // afvinken
@@ -1169,6 +1205,21 @@ function renderDayEvents(){
   });
 }
 function repeatLabel(r){ return {daily:'dagelijks',weekly:'wekelijks',monthly:'maandelijks'}[r]||''; }
+
+/* ---------- MAKER-ATTRIBUTIE ("wie plant wat") ---------- */
+// stabiel kleurtje per persoon (zelfde naam -> zelfde kleur, overal)
+function colorFromString(s){
+  let h=0; s=String(s||'').toLowerCase();
+  for(let i=0;i<s.length;i++) h=(h*31 + s.charCodeAt(i))>>>0;
+  return `hsl(${h%360} 60% 52%)`;
+}
+// klein avatartje (gekleurd bolletje met initiaal) + naam
+function creatorBadge(ev){
+  if(!ev.creator) return '';
+  const naam = String(ev.creator);
+  const initiaal = naam.trim().charAt(0).toUpperCase() || '?';
+  return `<span class="who" style="background:${colorFromString(naam)}" title="Gepland door ${escapeHtml(naam)}">${escapeHtml(initiaal)}</span>`;
+}
 
 /* ---------- FORMULIER ---------- */
 function buildCatPick(){
@@ -1214,7 +1265,9 @@ function saveEvent(){
     Object.assign(saved,{title,cat:formCat,start,end,time,note,repeat});
   } else {
     saved={ id:'e'+Date.now()+Math.random().toString(36).slice(2,6),
-      title, cat:formCat, start, end, time, note, repeat };
+      title, cat:formCat, start, end, time, note, repeat,
+      created_by: currentUser ? currentUser.id : null,   // wie maakte dit
+      creator: userName() };                              // weergavenaam
     state.events.push(saved);
   }
   saveState(); dbUpsertEvent(saved); blip(720); closeOverlay('formOverlay');
