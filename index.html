@@ -499,7 +499,7 @@ function loadState(){
     const raw = localStorage.getItem(STORE_KEY);
     if(raw) return JSON.parse(raw);
   }catch(e){ console.warn('kon state niet laden', e); }
-  return { events:[], muted:false, streak:{ count:0, lastDate:null } };
+  return { events:[], muted:false, streak:{ count:0, lastDate:null }, pending:[] };
 }
 function saveState(){
   try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -545,32 +545,82 @@ async function pullAll(){
     state.events = (evRes.data||[]).map(rowToEvent);
     state.doneMap = {};
     (mkRes.data||[]).forEach(m=> state.doneMap[m.mark_key]=true);
+    // niet-gesyncte lokale wijzigingen er weer overheen leggen
+    (state.pending||[]).forEach(applyOpLocally);
     online = true; updateSyncUI(); saveState();
+    flushQueue();                  // probeer de wachtrij meteen te legen
     return true;
   }catch(e){ console.warn('pull mislukt', e); online=false; updateSyncUI(); return false; }
 }
 
-// één afspraak opslaan/bijwerken (upsert op id)
-async function dbUpsertEvent(ev){
-  if(!sb) return;
-  try{ const {error}=await sb.from('events').upsert(eventToRow(ev)); if(error) throw error; online=true; updateSyncUI(); }
-  catch(e){ console.warn('opslaan online mislukt', e); flagOffline(); }
+/* ---------- SYNC-WACHTRIJ (offline-bestendig) ----------
+   Elke schrijfactie wordt als 'op' in de wachtrij gezet en in volgorde
+   naar de cloud gestuurd. Lukt het niet (offline), dan blijft de op in
+   de rij staan (bewaard in localStorage) en proberen we later opnieuw —
+   ook na een reload. Zo gaat geen enkele wijziging verloren. */
+
+// de ruwe cloud-bewerking; gooit een fout bij mislukken
+async function syncOp(op){
+  if(op.op==='upsertEvent'){
+    const { error } = await sb.from('events').upsert(eventToRow(op.ev));
+    if(error) throw error;
+  } else if(op.op==='deleteEvent'){
+    let r = await sb.from('events').delete().eq('id', op.id);
+    if(r.error) throw r.error;
+    r = await sb.from('done_marks').delete().or('mark_key.eq.'+op.id+',mark_key.like.'+op.id+'@%');
+    if(r.error) throw r.error;
+  } else if(op.op==='setMark'){
+    if(op.on){ const { error } = await sb.from('done_marks').upsert({ mark_key:op.key }); if(error) throw error; }
+    else     { const { error } = await sb.from('done_marks').delete().eq('mark_key', op.key); if(error) throw error; }
+  }
 }
-// afspraak + bijbehorende afvink-merken verwijderen
-async function dbDeleteEvent(id){
-  if(!sb) return;
-  try{
-    await sb.from('events').delete().eq('id', id);
-    await sb.from('done_marks').delete().or('mark_key.eq.'+id+',mark_key.like.'+id+'@%');
-  }catch(e){ console.warn('verwijderen online mislukt', e); flagOffline(); }
+
+// een wijziging in de wachtrij zetten en proberen te versturen
+function enqueue(op){
+  if(!sb) return;                 // geen cloud-client: lokaal-only modus
+  state.pending = state.pending || [];
+  state.pending.push(op);
+  saveState();
+  updateSyncUI();
+  flushQueue();
 }
-// een afvink-merk zetten/wissen
-async function dbSetMark(key, on){
-  if(!sb) return;
+
+// de wachtrij in volgorde leegmaken
+let flushing = false;
+async function flushQueue(){
+  if(!sb || flushing) return;
+  if(!state.pending || !state.pending.length){ updateSyncUI(); return; }
+  flushing = true;
   try{
-    if(on) await sb.from('done_marks').upsert({ mark_key:key });
-    else   await sb.from('done_marks').delete().eq('mark_key', key);
-  }catch(e){ console.warn('afvinken online mislukt', e); flagOffline(); }
+    while(state.pending.length){
+      try{ await syncOp(state.pending[0]); }
+      catch(e){ console.warn('sync mislukt, blijft in wachtrij', e); flagOffline(); return; }
+      state.pending.shift(); saveState(); updateSyncUI();
+    }
+    // alles weg: we zijn (weer) online
+    const wasOffline = !online || warnedOffline;
+    online = true; warnedOffline = false; updateSyncUI();
+    if(wasOffline) say('Terug verbonden — alles is gesynct! ☁️', 4000);
+  } finally { flushing = false; }
+}
+
+// publieke helpers die het de rest van de app makkelijk maken
+function dbUpsertEvent(ev){ enqueue({ op:'upsertEvent', ev }); }
+function dbDeleteEvent(id){ enqueue({ op:'deleteEvent', id }); }
+function dbSetMark(key, on){ enqueue({ op:'setMark', key, on }); }
+
+// een wachtrij-op ook lokaal toepassen (zodat een pull ze niet wegveegt)
+function applyOpLocally(op){
+  if(op.op==='upsertEvent'){
+    const i = state.events.findIndex(x=>x.id===op.ev.id);
+    if(i>=0) state.events[i]=op.ev; else state.events.push(op.ev);
+  } else if(op.op==='deleteEvent'){
+    state.events = state.events.filter(x=>x.id!==op.id);
+    Object.keys(state.doneMap||{}).forEach(k=>{ if(k===op.id || k.indexOf(op.id+'@')===0) delete state.doneMap[k]; });
+  } else if(op.op==='setMark'){
+    if(!state.doneMap) state.doneMap={};
+    if(op.on) state.doneMap[op.key]=true; else delete state.doneMap[op.key];
+  }
 }
 // volledige agenda vervangen (gebruikt bij import & migratie)
 async function dbReplaceAll(){
@@ -616,6 +666,8 @@ function updateSyncUI(){
   const chip=document.getElementById('syncChip');
   if(!chip) return;
   if(!sb){ chip.textContent='💾 lokaal'; chip.title='Niet verbonden met de cloud'; return; }
+  const q = (state.pending||[]).length;
+  if(q){ chip.textContent='📤 '+q+' te syncen'; chip.title=q+' wijziging(en) wachten op verbinding'; return; }
   chip.textContent = online ? '☁️ live' : '📴 offline';
   chip.title = online ? 'Verbonden — wijzigingen worden gedeeld' : 'Geen verbinding — lokaal bewaard';
 }
@@ -1288,11 +1340,14 @@ addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeOverlay('dayOverlay')
 /* ---------- INIT ---------- */
 function init(){
   if(!state.doneMap) state.doneMap={};
+  if(!state.pending) state.pending=[];
   refreshMute();
   updateSyncUI();
   render();                 // render achter de login-overlay
   initSupabase();           // Supabase-client klaarzetten
   startAuthFlow();          // login checken → daarna cloud + live-sync
+  // bij terugkerende verbinding: wachtrij meteen wegwerken
+  window.addEventListener('online', ()=>{ flushQueue(); });
 }
 init();
 </script>
