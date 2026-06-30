@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- Content-Security-Policy: beperkt waar code/data heen mag. connect-src laat
      enkel deze Supabase toe (REST + realtime websocket); fonts via Google;
      supabase-js via jsDelivr. 'unsafe-inline' is nodig omdat de app inline draait. -->
@@ -164,7 +164,7 @@ button{ font-family:var(--font-display); cursor:pointer; border:none; color:var(
 .cell .num{ height:18px; line-height:18px; }   /* vaste nummerhoogte → balken lijnen uit */
 
 .cell{
-  position:relative; min-height:92px; border-radius:20px; padding:6px;
+  position:relative; min-height:112px; border-radius:20px; padding:6px;
   background:var(--panel-2); border:3px solid rgba(0,0,0,.04);
   display:flex; flex-direction:column; gap:3px; cursor:pointer; overflow:hidden;
   transition:transform .14s cubic-bezier(.34,1.56,.64,1), box-shadow .14s;
@@ -237,6 +237,30 @@ button{ font-family:var(--font-display); cursor:pointer; border:none; color:var(
 .ai-title{ font-family:var(--font-display); font-weight:700; }
 .ai-meta{ font-size:.82rem; color:var(--ink-soft); }
 
+/* ---------- 4b. DAG-WEERGAVE (weekstrip + dag-lijst) ---------- */
+.dayview{ background:var(--panel); border-radius:var(--radius-lg); padding:18px; box-shadow:var(--shadow); border:4px solid rgba(255,255,255,.7); }
+.dayview-head{ display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:12px; }
+.dv-month{ font-family:var(--font-display); font-weight:800; font-size:1.25rem; min-width:170px; text-align:center; text-transform:capitalize; }
+/* horizontale weekstrip — tik een dag om te kiezen, swipe/pijlen voor andere weken */
+.daystrip{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:16px; touch-action:pan-y; }
+.daycol{
+  display:flex; flex-direction:column; align-items:center; gap:5px; padding:8px 0 6px;
+  border-radius:16px; background:var(--panel-2); border:3px solid transparent;
+  transition:transform .12s, border-color .15s; cursor:pointer;
+}
+.daycol:hover{ transform:translateY(-2px); }
+.daycol:active{ transform:scale(.94); }
+.dc-wd{ font-family:var(--font-display); font-weight:700; font-size:.72rem; color:var(--ink-soft); }
+.dc-num{ font-family:var(--font-display); font-weight:700; font-size:1.05rem; width:34px; height:34px; line-height:34px; text-align:center; border-radius:50%; }
+.daycol.today .dc-num{ color:var(--accent-deep); }
+.daycol.sel{ border-color:var(--accent); }
+.daycol.sel .dc-num{ background:var(--accent); color:#fff; }
+.dc-dot{ width:5px; height:5px; border-radius:50%; background:var(--accent-deep); }
+.dc-dot.empty{ background:transparent; }   /* houdt de hoogte gelijk zonder stip */
+.daycol.sel .dc-dot{ background:var(--accent-deep); }
+.dayview-date{ font-family:var(--font-display); font-weight:700; color:var(--accent-deep); margin:0 0 12px; font-size:1.15rem; text-transform:capitalize; }
+#dayViewEvents{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+
 /* ---------- 5. MODAL / DAGPANEEL ---------- */
 .overlay{
   position:fixed; inset:0; background:rgba(40,30,30,.42); backdrop-filter:blur(3px);
@@ -263,16 +287,17 @@ html.precheck-authed #loginOverlay{ display:none; }
   animation:popIn .25s backwards;
 }
 .dayrow.done .dr-title{ text-decoration:line-through; opacity:.55; }
-.dr-check{ width:34px; height:34px; border-radius:50%; border:3px solid var(--leaf-deep); background:#fff; font-size:1rem; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:transform .12s; }
+.dr-check{ width:44px; height:44px; border-radius:50%; border:3px solid var(--leaf-deep); background:#fff; font-size:1.05rem; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:transform .12s; }
 .dr-check.on{ background:var(--leaf); color:#fff; }
 .dr-check:active{ transform:scale(.85); }
-.dr-icon{ font-size:1.3rem; }
+.dr-icon{ font-size:1.3rem; flex-shrink:0; }
 .dr-body{ flex:1; min-width:0; }
 .dr-title{ font-family:var(--font-display); font-weight:700; }
 .dr-meta{ font-size:.8rem; color:var(--ink-soft); }
 /* maker-avatartje */
 .who{ display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; color:#fff; font-family:var(--font-display); font-weight:700; font-size:.62rem; vertical-align:middle; margin-right:4px; box-shadow:0 1px 2px rgba(0,0,0,.2); }
-.dr-del{ background:transparent; font-size:1.05rem; opacity:.5; padding:4px; }
+/* ruim tapvlak (≥44px) voor verwijderen, ook al oogt het icoon klein */
+.dr-del{ background:transparent; font-size:1.15rem; opacity:.55; flex-shrink:0; width:44px; height:44px; border-radius:50%; display:flex; align-items:center; justify-content:center; }
 .dr-del:hover{ opacity:1; transform:scale(1.15); }
 
 .empty-day{ text-align:center; color:var(--ink-soft); padding:18px 0; font-weight:600; }
@@ -331,10 +356,21 @@ html.precheck-authed #loginOverlay{ display:none; }
 /* ---------- 8. RESPONSIVE ---------- */
 @media (max-width:640px){
   .title{ font-size:1.3rem; }
-  .calendar{ --cell-gap:4px; --band-top:18px; }   /* compactere band op mobiel */
-  .cell{ min-height:64px; padding:4px; }
-  .cell .num{ font-size:.85rem; height:14px; line-height:14px; }
-  .cell.today::after{ font-size:.5rem; padding:1px 5px; }
+  /* minimale buitenmarge → de dagtegels vullen de volle schermbreedte */
+  .app{ padding-left:6px; padding-right:6px; padding-top:14px; }
+  /* geen kader meer: kalender frameless, geen paneel/rand/schaduw/padding,
+     zodat alle ruimte naar de dagtegels gaat */
+  .calendar{ --cell-gap:5px; --band-top:21px; padding:0; background:transparent; border:none; box-shadow:none; }
+  .cell{ min-height:92px; padding:5px; }                        /* hogere, vollere dagtegels */
+  .cell .num{ font-size:.9rem; height:16px; line-height:16px; }
+  /* dag-weergave ook frameless + volle breedte op mobiel */
+  .dayview{ padding:0; background:transparent; border:none; box-shadow:none; }
+  .dv-month{ font-size:1.1rem; min-width:auto; }
+  .daystrip{ gap:4px; }
+  .dc-num{ font-size:1rem; width:32px; height:32px; line-height:32px; }
+  /* "vandaag"-tekstbadge past niet in de smalle cel → weg; de cel valt al op
+     door accent-kleur + rand + dagnummer-kleur */
+  .cell.today::after{ display:none; }
   .evchip{ font-size:.58rem; padding:1px 5px; }
   .lanebar{ font-size:.55rem; padding:0 5px; }
   .weekdays div{ font-size:.7rem; }
@@ -342,10 +378,29 @@ html.precheck-authed #loginOverlay{ display:none; }
   .monthnav h2{ font-size:1.2rem; min-width:auto; }
   .mascot .face{ width:64px; height:64px; font-size:2rem; }
   .bubble{ font-size:.85rem; max-width:200px; }
-  /* op heel kleine schermen: toon enkel stipjes ipv chips, behalve eerste */
-  .cell .evchip:nth-of-type(n+2){ display:none; }
-  .cell.has-events::before{ content:''; }
+  /* datum/tijd-paren stapelen i.p.v. naast elkaar (native date-inputs krimpen
+     niet onder hun minimumbreedte en liepen anders buiten de modal) */
+  .row2{ flex-direction:column; }
+  /* op smalle schermen toont renderCalendar nog max. 1 chip + "+N"-teller
+     (zie limit in renderCalendar); geen CSS-hack meer nodig */
+
+  /* compactere header: chips + toolknoppen krijgen minder padding zodat ze
+     niet over te veel rijen wrappen */
+  .topbar{ padding:12px 14px; gap:8px; }
+  .streak{ padding:6px 10px; font-size:.85rem; border-width:2px; }
+  .btn.small{ padding:7px 11px; }
+  .viewtoggle button{ padding:8px 14px; }
+
+  /* dagrijen: krappere afstanden + kleiner icoon geven de titel meer ruimte
+     (vink- en verwijderknop blijven 44px tapvlak) */
+  .dayrow{ gap:8px; padding:10px; }
+  .dr-icon{ font-size:1.1rem; }
+  .agenda-item{ gap:10px; }
 }
+
+/* iOS safe-area: houd content + zwevende mascotte weg van notch/home-indicator */
+.app{ padding-bottom:max(120px, env(safe-area-inset-bottom)); }
+.mascot{ bottom:max(18px, env(safe-area-inset-bottom)); right:max(18px, env(safe-area-inset-right)); }
 
 /* ---------- TOEGANKELIJKHEID ---------- */
 /* zichtbare focus-ring voor toetsenbordgebruikers */
@@ -384,7 +439,8 @@ html.precheck-authed #loginOverlay{ display:none; }
   <!-- VIEW TOGGLE -->
   <div class="bar">
     <div class="viewtoggle">
-      <button id="calViewBtn" class="active">📅 Kalender</button>
+      <button id="calViewBtn" class="active">📅 Maand</button>
+      <button id="dayViewBtn">📆 Dag</button>
       <button id="listViewBtn">📋 Agenda</button>
     </div>
     <button class="btn leaf small" id="todayBtn">📍 Vandaag</button>
@@ -403,6 +459,19 @@ html.precheck-authed #loginOverlay{ display:none; }
       <div>ma</div><div>di</div><div>wo</div><div>do</div><div>vr</div><div>za</div><div>zo</div>
     </div>
     <div class="grid" id="grid"></div>
+  </section>
+
+  <!-- DAG-WEERGAVE (mobiel-vriendelijk: weekstrip + dag-lijst) -->
+  <section class="dayview" id="dayView" style="display:none">
+    <div class="dayview-head">
+      <button class="btn round" id="dvPrev" aria-label="Vorige week">‹</button>
+      <div class="dv-month" id="dvMonth">…</div>
+      <button class="btn round" id="dvNext" aria-label="Volgende week">›</button>
+    </div>
+    <div class="daystrip" id="dayStrip" aria-label="Kies een dag"></div>
+    <h3 class="dayview-date" id="dayViewTitle" aria-live="polite">…</h3>
+    <div id="dayViewEvents"></div>
+    <button class="btn primary" id="dvAddBtn" style="width:100%; margin-top:6px">➕ Afspraak toevoegen</button>
   </section>
 
   <!-- AGENDA-LIJST -->
@@ -526,7 +595,8 @@ const CATEGORIES = {
 
 let state = loadState();      // { events:[], muted:false, streak:{count,lastDate} }
 let viewDate = new Date();    // welke maand we tonen
-let currentView = 'cal';      // 'cal' | 'list'
+let currentView = 'cal';      // 'cal' | 'day' | 'list'
+let dayViewDate = todayISO(); // gekozen dag in de dag-weergave (ISO)
 let selectedDate = null;      // ISO string van geopende dag
 let editingId = null;         // event dat bewerkt wordt
 let formCat = 'sociaal';      // gekozen categorie in formulier
@@ -877,9 +947,10 @@ function seizoenVoorMaand(m){ // m = 0..11
 const SEIZOEN_STEMPEL = { lente:'🌸', zomer:'🐚', herfst:'🍂', winter:'❄️' };
 const SEIZOEN_MASCOT = { lente:'🐰', zomer:'🐱', herfst:'🦊', winter:'🐧' };
 
-function applyTheme(){
-  // seizoen op basis van de getoonde maand
-  const seiz = seizoenVoorMaand(viewDate.getMonth());
+function applyTheme(month){
+  // seizoen op basis van de getoonde maand (default: de maandgrid-maand)
+  const m = (month==null) ? viewDate.getMonth() : month;
+  const seiz = seizoenVoorMaand(m);
   document.body.classList.remove('lente','zomer','herfst','winter');
   document.body.classList.add(seiz);
   document.getElementById('seasonBadge').textContent = seiz;
@@ -943,6 +1014,9 @@ function renderCalendar(){
 
   const grid = document.getElementById('grid');
   grid.innerHTML='';
+
+  // hoeveel chips passen er per cel? mobiel is te smal voor 3 → toon er 1 + "+N"
+  const chipLimit = (window.matchMedia && window.matchMedia('(max-width:640px)').matches) ? 1 : 3;
 
   const first = new Date(y,m,1);
   const lead = mondayIndex(first);           // lege cellen voor de 1e
@@ -1010,7 +1084,7 @@ function renderCalendar(){
       if(evs.length) cell.classList.add('has-events');
       let shown=0;
       for(const ev of singles){
-        if(shown>=3) break;
+        if(shown>=chipLimit) break;
         const cat=CATEGORIES[ev.cat]||CATEGORIES.afspraak;
         const chip=document.createElement('div');
         chip.className='evchip'+(isDone(ev,dISO)?' done':'');
@@ -1019,7 +1093,7 @@ function renderCalendar(){
         cell.appendChild(chip);
         shown++;
       }
-      if(singles.length>shown){ const more=document.createElement('div'); more.className='evmore'; more.textContent=`+${singles.length-shown} meer`; cell.appendChild(more); }
+      if(singles.length>shown){ const more=document.createElement('div'); more.className='evmore'; more.textContent= chipLimit===1 ? `+${singles.length-shown}` : `+${singles.length-shown} meer`; cell.appendChild(more); }
 
       if(dISO<tIso){ const seiz=seizoenVoorMaand(m); const st=document.createElement('div'); st.className='stamp'; st.textContent=SEIZOEN_STEMPEL[seiz]||'🐾'; cell.appendChild(st); }
 
@@ -1149,7 +1223,12 @@ function renderAgenda(){
   }
 }
 
-function render(){ currentView==='cal' ? renderCalendar() : renderAgenda(); updateStreakUI(); }
+function render(){
+  if(currentView==='cal') renderCalendar();
+  else if(currentView==='day') renderDayView();
+  else renderAgenda();
+  updateStreakUI();
+}
 
 /* ---------- DAG-DETAIL OPENEN ---------- */
 function openDay(dISO){
@@ -1160,18 +1239,25 @@ function openDay(dISO){
   renderDayEvents();
   openOverlay('dayOverlay');
 }
-function renderDayEvents(){
-  const wrap=document.getElementById('dayEvents');
+// na een wijziging (afvinken/verwijderen): ververs zowel het open dagpaneel
+// als de onderliggende weergave (maand/dag/agenda)
+function refreshDaySurfaces(){
+  if(document.getElementById('dayOverlay').classList.contains('open')) renderDayEvents();
+  render();
+}
+
+// bouwt de event-rijen voor één dag in een gegeven container (gedeeld door het
+// modale dagpaneel én de dag-weergave). Geeft true terug als er afspraken waren.
+function renderEventRows(wrap, dayISO){
   wrap.innerHTML='';
-  const evs=eventsOnDay(selectedDate);
+  const evs=eventsOnDay(dayISO);
   if(!evs.length){
     wrap.innerHTML='<div class="empty-day">Een rustige dag — niks gepland! 🌼<br>Tijd om iets leuks te bedenken?</div>';
-    sayLeegDag();
-    return;
+    return false;
   }
   evs.forEach(ev=>{
     const cat=CATEGORIES[ev.cat]||CATEGORIES.afspraak;
-    const done=isDone(ev,selectedDate);
+    const done=isDone(ev,dayISO);
     const row=document.createElement('div');
     row.className='dayrow'+(done?' done':'');
     row.style.borderLeftColor=cat.color;
@@ -1186,24 +1272,65 @@ function renderDayEvents(){
     // afvinken
     row.querySelector('.dr-check').addEventListener('click',(e)=>{
       e.stopPropagation();
-      const nowDone=toggleDone(ev,selectedDate);
+      const nowDone=toggleDone(ev,dayISO);
       if(nowDone){ celebrate(e.clientX,e.clientY); blip(720,'done'); sayCompliment(); checkStreak(); }
       else blip(360);
-      renderDayEvents(); render();
+      refreshDaySurfaces();
     });
     // verwijderen
     row.querySelector('.dr-del').addEventListener('click',(e)=>{
       e.stopPropagation();
       if(confirm('Deze afspraak verwijderen?')){
         state.events=state.events.filter(x=>x.id!==ev.id);
-        saveState(); dbDeleteEvent(ev.id); blip(300); renderDayEvents(); render();
+        saveState(); dbDeleteEvent(ev.id); blip(300); refreshDaySurfaces();
       }
     });
     // klik op rij -> bewerken
     row.addEventListener('click',()=>openForm(ev));
     wrap.appendChild(row);
   });
+  return true;
 }
+
+function renderDayEvents(){
+  const had = renderEventRows(document.getElementById('dayEvents'), selectedDate);
+  if(!had) sayLeegDag();
+}
+
+/* ---------- DAG-WEERGAVE (mobiel-vriendelijk) ---------- */
+const WEEKDAG_KORT = ['ma','di','wo','do','vr','za','zo'];
+function renderDayView(){
+  // seizoen/thema mee laten lopen met de getoonde dag (zonder de maandgrid te verzetten)
+  const sel = parseISO(dayViewDate);
+  applyTheme(sel.getMonth());
+  document.getElementById('dvMonth').textContent = `${MAANDEN[sel.getMonth()]} ${sel.getFullYear()}`;
+  buildDayStrip();
+  document.getElementById('dayViewTitle').textContent =
+    dayViewDate===todayISO() ? `Vandaag — ${prettyDate(dayViewDate)}` : prettyDate(dayViewDate);
+  renderEventRows(document.getElementById('dayViewEvents'), dayViewDate);
+}
+function buildDayStrip(){
+  const strip=document.getElementById('dayStrip');
+  strip.innerHTML='';
+  const sel=parseISO(dayViewDate);
+  const monday=addDays(sel, -mondayIndex(sel));   // maandag van deze week
+  const tIso=todayISO();
+  for(let i=0;i<7;i++){
+    const d=addDays(monday,i), dISO=iso(d);
+    const col=document.createElement('button'); col.className='daycol';
+    if(dISO===dayViewDate) col.classList.add('sel');
+    if(dISO===tIso) col.classList.add('today');
+    const heeftEvents=eventsOnDay(dISO).length>0;
+    col.innerHTML=`<span class="dc-wd">${WEEKDAG_KORT[i]}</span>`+
+                  `<span class="dc-num">${d.getDate()}</span>`+
+                  `<span class="dc-dot${heeftEvents?'':' empty'}"></span>`;
+    col.setAttribute('aria-label', prettyDate(dISO)+(heeftEvents?' (afspraken)':''));
+    if(dISO===dayViewDate) col.setAttribute('aria-current','date');
+    col.addEventListener('click',()=>{ dayViewDate=dISO; blip(520); renderDayView(); });
+    strip.appendChild(col);
+  }
+}
+function shiftDayWeek(n){ dayViewDate=iso(addDays(parseISO(dayViewDate),n)); blip(n<0?480:560); renderDayView(); }
 function repeatLabel(r){ return {daily:'dagelijks',weekly:'wekelijks',monthly:'maandelijks'}[r]||''; }
 
 /* ---------- MAKER-ATTRIBUTIE ("wie plant wat") ---------- */
@@ -1375,6 +1502,10 @@ const fx=document.getElementById('fx'); const fctx=fx.getContext('2d');
 let particles=[]; let fxRunning=false;
 function sizeFx(){ fx.width=innerWidth; fx.height=innerHeight; }
 addEventListener('resize',sizeFx); sizeFx();
+// bij resize/draaien de kalender hertekenen zodat het aantal chips per cel
+// (chipLimit) mee verandert met de breedte; gedebounced tegen veel renders
+let resizeRenderT=null;
+addEventListener('resize',()=>{ clearTimeout(resizeRenderT); resizeRenderT=setTimeout(()=>{ if(currentView==='cal') render(); },200); });
 const LEAF_CHARS=['🍃','🌸','🍂','✨','🌟','🐾'];
 function celebrate(x,y){
   const seiz=seizoenVoorMaand(viewDate.getMonth());
@@ -1435,19 +1566,38 @@ function shake(el){ el.style.animation='wiggle .35s'; setTimeout(()=>el.style.an
 /* ---------- EVENT LISTENERS / WIRING ---------- */
 document.getElementById('prevBtn').addEventListener('click',()=>{ viewDate.setMonth(viewDate.getMonth()-1); render(); blip(480); });
 document.getElementById('nextBtn').addEventListener('click',()=>{ viewDate.setMonth(viewDate.getMonth()+1); render(); blip(560); });
-document.getElementById('todayBtn').addEventListener('click',()=>{ viewDate=new Date(); render(); blip(640); say('Terug naar vandaag! 📍'); });
+document.getElementById('todayBtn').addEventListener('click',()=>{ viewDate=new Date(); dayViewDate=todayISO(); render(); blip(640); say('Terug naar vandaag! 📍'); });
 
 document.getElementById('calViewBtn').addEventListener('click',()=>setView('cal'));
+document.getElementById('dayViewBtn').addEventListener('click',()=>setView('day'));
 document.getElementById('listViewBtn').addEventListener('click',()=>setView('list'));
 function setView(v){
   currentView=v; blip(v==='cal'?520:600);
   document.getElementById('calViewBtn').classList.toggle('active',v==='cal');
+  document.getElementById('dayViewBtn').classList.toggle('active',v==='day');
   document.getElementById('listViewBtn').classList.toggle('active',v==='list');
   document.getElementById('calendarView').style.display = v==='cal'?'':'none';
+  document.getElementById('dayView').style.display = v==='day'?'':'none';
   document.getElementById('agendaView').style.display = v==='list'?'':'none';
-  document.getElementById('monthNav').style.display = v==='cal'?'':'none';
+  document.getElementById('monthNav').style.display = v==='cal'?'':'none';   // maand-nav enkel bij de grid
   render();
 }
+
+// dag-weergave: week-navigatie (pijlen + swipe) en snel een afspraak toevoegen
+document.getElementById('dvPrev').addEventListener('click',()=>shiftDayWeek(-7));
+document.getElementById('dvNext').addEventListener('click',()=>shiftDayWeek(7));
+document.getElementById('dvAddBtn').addEventListener('click',()=>{ selectedDate=dayViewDate; openForm(null,{ start:dayViewDate }); });
+// horizontale swipe over de weekstrip wisselt van week
+(function(){
+  const strip=document.getElementById('dayStrip'); let x0=null,y0=null;
+  strip.addEventListener('touchstart',e=>{ x0=e.touches[0].clientX; y0=e.touches[0].clientY; },{passive:true});
+  strip.addEventListener('touchend',e=>{
+    if(x0===null) return;
+    const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0;
+    if(Math.abs(dx)>40 && Math.abs(dx)>Math.abs(dy)) shiftDayWeek(dx<0?7:-7);
+    x0=y0=null;
+  },{passive:true});
+})();
 
 document.getElementById('dayClose').addEventListener('click',()=>{ closeOverlay('dayOverlay'); blip(360); });
 document.getElementById('formClose').addEventListener('click',()=>{ closeOverlay('formOverlay'); blip(360); });
